@@ -19,60 +19,65 @@ void CapacitiveWaterSensor::setup() {
     
     ESP_LOGCONFIG(TAG, "  Send Pin: GPIO%u", send_pin_);
     ESP_LOGCONFIG(TAG, "  Receive Pin: GPIO%u", receive_pin_);
+    ESP_LOGCONFIG(TAG, "  Samples: %u", samples_);
+    ESP_LOGCONFIG(TAG, "  Timeout: %u ms", timeout_ms_);
 }
 
 long CapacitiveWaterSensor::readCapacitiveSensor() {
     long total = 0;
-    // Исправляем: приводим оба аргумента к одному типу
-    uint32_t actual_samples = samples_;
-    if (actual_samples > 30) actual_samples = 30; // Ограничиваем для теста
-    
     unsigned long timeout_us = timeout_ms_ * 1000UL;
+    bool timeout_occurred = false;
     
-    for (uint32_t i = 0; i < actual_samples; i++) {
-        // Разряжаем receive пин
+    for (uint32_t i = 0; i < samples_; i++) {
+        // Полностью разряжаем receive пин
         pinMode(receive_pin_, OUTPUT);
         digitalWrite(receive_pin_, LOW);
         delayMicroseconds(10);
-        
-        // Переключаем receive обратно на INPUT
         pinMode(receive_pin_, INPUT);
         
         // Отправляем импульс
         digitalWrite(send_pin_, HIGH);
         
-        // Измеряем время
+        // Измеряем время до срабатывания или таймаута
         unsigned long start = micros();
         unsigned long now = start;
         
-        // Ждем пока receive пин станет HIGH
         while (digitalRead(receive_pin_) == LOW) {
             now = micros();
-            if (now - start > timeout_us) {
+            if (now - start >= timeout_us) {
+                timeout_occurred = true;
                 break;
-            }
-            // Небольшая задержка для экономии CPU
-            if ((now - start) > 100) {
-                delayMicroseconds(5);
             }
         }
         
-        // Выключаем send пин
         digitalWrite(send_pin_, LOW);
         
-        // Добавляем измерение
-        total += (now - start);
+        // Если был таймаут, не добавляем к total (как в библиотеке CapacitiveSensor)
+        if (!timeout_occurred) {
+            total += (now - start);
+        }
         
-        // Короткая пауза между измерениями
+        // Быстрая разрядка
+        pinMode(receive_pin_, OUTPUT);
+        digitalWrite(receive_pin_, LOW);
+        delayMicroseconds(10);
+        pinMode(receive_pin_, INPUT);
+        
+        // Небольшая пауза между измерениями
         delayMicroseconds(50);
     }
     
-    // Если total очень маленький - короткое замыкание
-    if (total < 10) {
-        return -2;
+    // Если были таймауты во всех измерениях - значит короткое замыкание
+    if (timeout_occurred && total == 0) {
+        return -2;  // Специальное значение - короткое замыкание (бак полон)
     }
     
-    return total / actual_samples;
+    // Если измерений не было или они очень маленькие - сухо
+    if (total < 100) {
+        return 0;  // Сухой датчик
+    }
+    
+    return total / samples_;
 }
 
 void CapacitiveWaterSensor::update() {
@@ -81,14 +86,19 @@ void CapacitiveWaterSensor::update() {
     long reading_raw = readCapacitiveSensor();
     float mapped_value;
 
+    // Подробное логирование для калибровки
+    ESP_LOGI(TAG, "RAW reading: %ld", reading_raw);
+
     if (reading_raw == -2) {
-        mapped_value = static_cast<float>(shorted_value_);
-        ESP_LOGD(TAG, "RAW: -2 → SHORTED (%.1f)", mapped_value);
-    } else if (reading_raw < 10) {
+        // Короткое замыкание - вода касается обоих щупов (бак полон)
+        mapped_value = static_cast<float>(shorted_value_);  // 125
+        ESP_LOGI(TAG, "  → SHORTED (full tank) - value: %.1f", mapped_value);
+    } else if (reading_raw == 0) {
+        // Сухой датчик - нет воды
         mapped_value = 0.0f;
-        ESP_LOGD(TAG, "RAW: %ld → DRY", reading_raw);
+        ESP_LOGI(TAG, "  → DRY - value: 0");
     } else {
-        // Нормальное измерение
+        // Нормальное измерение - есть вода, но нет замыкания
         float raw_float = static_cast<float>(reading_raw);
         float min_float = static_cast<float>(min_raw_);
         float max_float = static_cast<float>(max_raw_);
@@ -97,10 +107,12 @@ void CapacitiveWaterSensor::update() {
             max_float = min_float + 1.0f;
         }
         
+        // Маппинг в диапазон 0-120 как в оригинале
         float mapped = (raw_float - min_float) / (max_float - min_float) * 120.0f;
         mapped_value = std::max(0.0f, std::min(120.0f, mapped));
         
-        ESP_LOGD(TAG, "RAW: %ld → %.1f", reading_raw, mapped_value);
+        ESP_LOGI(TAG, "  → NORMAL - raw: %ld, min: %.0f, max: %.0f, mapped: %.1f", 
+                 reading_raw, min_float, max_float, mapped_value);
     }
 
     publish_state(mapped_value);
@@ -117,6 +129,7 @@ void CapacitiveWaterSensor::dump_config() {
     ESP_LOGCONFIG(TAG, "  Receive Pin: GPIO%u", receive_pin_);
     ESP_LOGCONFIG(TAG, "  Samples: %u", samples_);
     ESP_LOGCONFIG(TAG, "  Timeout: %u ms", timeout_ms_);
+    ESP_LOGCONFIG(TAG, "  Raw range: %u - %u", min_raw_, max_raw_);
     LOG_UPDATE_INTERVAL(this);
 }
 
