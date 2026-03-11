@@ -23,15 +23,17 @@ void CapacitiveWaterSensor::setup() {
 
 long CapacitiveWaterSensor::readCapacitiveSensor() {
     long total = 0;
-    const int samples = std::min(samples_, 50); // Ограничиваем samples для теста
+    // Исправляем: приводим оба аргумента к одному типу
+    uint32_t actual_samples = samples_;
+    if (actual_samples > 30) actual_samples = 30; // Ограничиваем для теста
+    
     unsigned long timeout_us = timeout_ms_ * 1000UL;
     
-    // Быстрое измерение без длительных задержек
-    for (int i = 0; i < samples; i++) {
+    for (uint32_t i = 0; i < actual_samples; i++) {
         // Разряжаем receive пин
         pinMode(receive_pin_, OUTPUT);
         digitalWrite(receive_pin_, LOW);
-        delayMicroseconds(10); // Минимальная задержка
+        delayMicroseconds(10);
         
         // Переключаем receive обратно на INPUT
         pinMode(receive_pin_, INPUT);
@@ -39,11 +41,11 @@ long CapacitiveWaterSensor::readCapacitiveSensor() {
         // Отправляем импульс
         digitalWrite(send_pin_, HIGH);
         
-        // Измеряем время с таймаутом
+        // Измеряем время
         unsigned long start = micros();
         unsigned long now = start;
         
-        // Ждем пока receive пин станет HIGH или таймаут
+        // Ждем пока receive пин станет HIGH
         while (digitalRead(receive_pin_) == LOW) {
             now = micros();
             if (now - start > timeout_us) {
@@ -65,21 +67,20 @@ long CapacitiveWaterSensor::readCapacitiveSensor() {
         delayMicroseconds(50);
     }
     
+    // Если total очень маленький - короткое замыкание
     if (total < 10) {
-        return -2; // Короткое замыкание
+        return -2;
     }
     
-    return total / samples;
+    return total / actual_samples;
 }
 
 void CapacitiveWaterSensor::update() {
-    // Измеряем время выполнения для отладки
     unsigned long start_time = millis();
     
     long reading_raw = readCapacitiveSensor();
     float mapped_value;
 
-    // Логируем с разными уровнями в зависимости от значения
     if (reading_raw == -2) {
         mapped_value = static_cast<float>(shorted_value_);
         ESP_LOGD(TAG, "RAW: -2 → SHORTED (%.1f)", mapped_value);
@@ -104,9 +105,8 @@ void CapacitiveWaterSensor::update() {
 
     publish_state(mapped_value);
     
-    // Логируем время выполнения
     unsigned long elapsed = millis() - start_time;
-    if (elapsed > 100) {
+    if (elapsed > 50) {
         ESP_LOGW(TAG, "Update took %lu ms", elapsed);
     }
 }
