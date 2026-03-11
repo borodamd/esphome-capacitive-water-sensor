@@ -30,7 +30,6 @@ class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor {
   uint8_t shorted_value_{125};
   uint32_t timeout_ms_{500};
   
-  // Встроенная реализация емкостного сенсора
   long readCapacitiveSensor();
 };
 
