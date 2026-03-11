@@ -2,10 +2,11 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import sensor
 from esphome.const import (
-    CONF_ID, 
-    CONF_UPDATE_INTERVAL, 
+    CONF_ID,
+    CONF_UPDATE_INTERVAL,
     DEVICE_CLASS_EMPTY,
-    STATE_CLASS_MEASUREMENT  # Этой строки не хватало
+    STATE_CLASS_MEASUREMENT,
+    UNIT_EMPTY
 )
 
 # Определение конфигурационных констант
@@ -28,7 +29,8 @@ CONFIG_SCHEMA = sensor.sensor_schema(
     CapacitiveWaterSensor,
     accuracy_decimals=1,
     device_class=DEVICE_CLASS_EMPTY,
-    state_class=STATE_CLASS_MEASUREMENT  # Теперь константа определена
+    state_class=STATE_CLASS_MEASUREMENT,
+    unit_of_measurement=UNIT_EMPTY
 ).extend({
     cv.GenerateID(): cv.declare_id(CapacitiveWaterSensor),
     cv.Required(CONF_SEND_PIN): cv.int_,
