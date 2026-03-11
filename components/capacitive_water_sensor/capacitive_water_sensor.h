@@ -3,7 +3,8 @@
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
 #include "esphome/components/sensor/sensor.h"
-// Убираем #include <CapacitiveSensor.h> из заголовочного файла
+
+// Это только объявление класса, без включения библиотеки
 
 namespace esphome {
 namespace capacitive_water_sensor {
@@ -25,13 +26,13 @@ class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor {
  protected:
   uint8_t send_pin_;
   uint8_t receive_pin_;
-  uint32_t samples_{1000};
+  uint32_t samples_{100};
   uint32_t min_raw_{4200};
   uint32_t max_raw_{11000};
   uint8_t shorted_value_{125};
   uint32_t timeout_ms_{500};
   
-  // Используем void* вместо конкретного типа для избежания проблем с библиотекой
+  // Используем void* для избежания проблем с типами
   void *sensor_{nullptr};
 };
 
