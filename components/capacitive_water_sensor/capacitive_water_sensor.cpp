@@ -12,12 +12,9 @@ CapacitiveWaterSensor::CapacitiveWaterSensor(uint8_t send_pin, uint8_t receive_p
 void CapacitiveWaterSensor::setup() {
     ESP_LOGCONFIG(TAG, "Setting up Capacitive Water Sensor...");
     
-    // Создаем экземпляр библиотеки
     sensor_ = new CapacitiveSensor(send_pin_, receive_pin_);
-    
-    // Настройка параметров как в оригинальном скетче
     sensor_->set_CS_Timeout_Millis(timeout_ms_);
-    sensor_->set_CS_AutocaL_Millis(0xFFFFFFFF);  // Отключаем автокалибровку
+    sensor_->set_CS_AutocaL_Millis(0xFFFFFFFF);
     
     ESP_LOGCONFIG(TAG, "Sensor initialized with send pin GPIO%u, receive pin GPIO%u", 
                   send_pin_, receive_pin_);
@@ -29,21 +26,16 @@ void CapacitiveWaterSensor::update() {
         return;
     }
 
-    // Чтение сырого значения с датчика
     long reading_raw = sensor_->capacitiveSensorRaw(samples_);
     float mapped_value;
 
-    // Обработка различных состояний датчика
     if (reading_raw == -2) {
-        // Короткое замыкание (полное погружение/вода замкнула контакты)
         mapped_value = static_cast<float>(shorted_value_);
         ESP_LOGD(TAG, "Sensor shorted (full water) - value: %.1f", mapped_value);
     } else if (reading_raw <= 0) {
-        // Ошибка чтения или сухой датчик
         mapped_value = 0.0f;
         ESP_LOGD(TAG, "Sensor error or dry - raw: %ld", reading_raw);
     } else {
-        // Нормальное измерение - маппинг значений в диапазон 0-120
         mapped_value = clamp(
             map(reading_raw, min_raw_, max_raw_, 0.0f, 120.0f),
             0.0f, 120.0f
@@ -51,7 +43,6 @@ void CapacitiveWaterSensor::update() {
         ESP_LOGD(TAG, "Normal reading - raw: %ld, mapped: %.1f", reading_raw, mapped_value);
     }
 
-    // Публикация значения
     publish_state(mapped_value);
 }
 
