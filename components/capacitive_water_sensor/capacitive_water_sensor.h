@@ -2,8 +2,8 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
-#include "esphome/components/sensor/sensor.h"  // Измененный путь
-#include <CapacitiveSensor.h>
+#include "esphome/components/sensor/sensor.h"
+// Убираем #include <CapacitiveSensor.h> из заголовочного файла
 
 namespace esphome {
 namespace capacitive_water_sensor {
@@ -31,7 +31,8 @@ class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor {
   uint8_t shorted_value_{125};
   uint32_t timeout_ms_{500};
   
-  CapacitiveSensor *sensor_{nullptr};
+  // Используем void* вместо конкретного типа для избежания проблем с библиотекой
+  void *sensor_{nullptr};
 };
 
 }  // namespace capacitive_water_sensor
