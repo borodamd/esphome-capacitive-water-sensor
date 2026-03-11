@@ -4,8 +4,6 @@
 #include "esphome/core/hal.h"
 #include "esphome/components/sensor/sensor.h"
 
-// Это только объявление класса, без включения библиотеки
-
 namespace esphome {
 namespace capacitive_water_sensor {
 
@@ -32,8 +30,8 @@ class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor {
   uint8_t shorted_value_{125};
   uint32_t timeout_ms_{500};
   
-  // Используем void* для избежания проблем с типами
-  void *sensor_{nullptr};
+  // Встроенная реализация емкостного сенсора
+  long readCapacitiveSensor();
 };
 
 }  // namespace capacitive_water_sensor
