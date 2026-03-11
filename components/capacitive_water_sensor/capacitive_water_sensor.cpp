@@ -13,9 +13,8 @@ CapacitiveWaterSensor::CapacitiveWaterSensor(uint8_t send_pin, uint8_t receive_p
 void CapacitiveWaterSensor::setup() {
     ESP_LOGCONFIG(TAG, "Setting up Capacitive Water Sensor...");
     
-    // Настраиваем пины
     pinMode(send_pin_, OUTPUT);
-    pinMode(receive_pin_, INPUT_PULLDOWN);  // Важно: используем PULLDOWN
+    pinMode(receive_pin_, INPUT);
     digitalWrite(send_pin_, LOW);
     
     ESP_LOGCONFIG(TAG, "  Send Pin: GPIO%u", send_pin_);
@@ -24,71 +23,69 @@ void CapacitiveWaterSensor::setup() {
 
 long CapacitiveWaterSensor::readCapacitiveSensor() {
     long total = 0;
-    const int samples = samples_;
+    const int samples = std::min(samples_, 50); // Ограничиваем samples для теста
     unsigned long timeout_us = timeout_ms_ * 1000UL;
     
+    // Быстрое измерение без длительных задержек
     for (int i = 0; i < samples; i++) {
-        // Полностью разряжаем receive пин
+        // Разряжаем receive пин
         pinMode(receive_pin_, OUTPUT);
         digitalWrite(receive_pin_, LOW);
-        delayMicroseconds(100);  // Увеличиваем время разряда
+        delayMicroseconds(10); // Минимальная задержка
         
         // Переключаем receive обратно на INPUT
-        pinMode(receive_pin_, INPUT_PULLDOWN);
+        pinMode(receive_pin_, INPUT);
         
         // Отправляем импульс
         digitalWrite(send_pin_, HIGH);
         
-        // Измеряем время
+        // Измеряем время с таймаутом
         unsigned long start = micros();
-        unsigned long end = start;
+        unsigned long now = start;
         
-        // Ждем пока receive пин станет HIGH
+        // Ждем пока receive пин станет HIGH или таймаут
         while (digitalRead(receive_pin_) == LOW) {
-            end = micros();
-            if (end - start > timeout_us) {
+            now = micros();
+            if (now - start > timeout_us) {
                 break;
             }
             // Небольшая задержка для экономии CPU
-            if ((end - start) % 100 == 0) delayMicroseconds(1);
+            if ((now - start) > 100) {
+                delayMicroseconds(5);
+            }
         }
         
         // Выключаем send пин
         digitalWrite(send_pin_, LOW);
         
-        // Добавляем измерение к общему
-        total += (end - start);
+        // Добавляем измерение
+        total += (now - start);
         
-        // Небольшая пауза между измерениями
-        delayMicroseconds(500);
+        // Короткая пауза между измерениями
+        delayMicroseconds(50);
     }
     
-    // Если total ОЧЕНЬ маленький - возможно короткое замыкание
     if (total < 10) {
-        return -2;  // Короткое замыкание
-    }
-    
-    // Если total подозрительно маленький - возможно проблема с подключением
-    if (total < 500) {
-        ESP_LOGW(TAG, "Very low reading: %ld", total);
+        return -2; // Короткое замыкание
     }
     
     return total / samples;
 }
 
 void CapacitiveWaterSensor::update() {
+    // Измеряем время выполнения для отладки
+    unsigned long start_time = millis();
+    
     long reading_raw = readCapacitiveSensor();
     float mapped_value;
 
-    // Всегда логируем для отладки
-    ESP_LOGI(TAG, "RAW Reading: %ld", reading_raw);
-
+    // Логируем с разными уровнями в зависимости от значения
     if (reading_raw == -2) {
         mapped_value = static_cast<float>(shorted_value_);
-        ESP_LOGI(TAG, "  → SHORTED (full water)");
-    } else if (reading_raw < 100) {
+        ESP_LOGD(TAG, "RAW: -2 → SHORTED (%.1f)", mapped_value);
+    } else if (reading_raw < 10) {
         mapped_value = 0.0f;
-        ESP_LOGI(TAG, "  → DRY or ERROR");
+        ESP_LOGD(TAG, "RAW: %ld → DRY", reading_raw);
     } else {
         // Нормальное измерение
         float raw_float = static_cast<float>(reading_raw);
@@ -102,10 +99,16 @@ void CapacitiveWaterSensor::update() {
         float mapped = (raw_float - min_float) / (max_float - min_float) * 120.0f;
         mapped_value = std::max(0.0f, std::min(120.0f, mapped));
         
-        ESP_LOGI(TAG, "  → Raw: %ld, Mapped: %.1f", reading_raw, mapped_value);
+        ESP_LOGD(TAG, "RAW: %ld → %.1f", reading_raw, mapped_value);
     }
 
     publish_state(mapped_value);
+    
+    // Логируем время выполнения
+    unsigned long elapsed = millis() - start_time;
+    if (elapsed > 100) {
+        ESP_LOGW(TAG, "Update took %lu ms", elapsed);
+    }
 }
 
 void CapacitiveWaterSensor::dump_config() {
