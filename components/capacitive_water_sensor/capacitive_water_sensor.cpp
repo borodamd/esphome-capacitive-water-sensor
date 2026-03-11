@@ -1,5 +1,10 @@
 #include "capacitive_water_sensor.h"
 #include "esphome/core/log.h"
+#include <Arduino.h>  // Добавляем для DigitalPin
+
+// Подключаем библиотеку только в .cpp файле
+#define CAPACITIVE_SENSOR_NUM_SAMPLES 10  // Уменьшаем для тестирования
+#include <CapacitiveSensor.h>
 
 namespace esphome {
 namespace capacitive_water_sensor {
@@ -12,9 +17,13 @@ CapacitiveWaterSensor::CapacitiveWaterSensor(uint8_t send_pin, uint8_t receive_p
 void CapacitiveWaterSensor::setup() {
     ESP_LOGCONFIG(TAG, "Setting up Capacitive Water Sensor...");
     
+    // Создаем экземпляр библиотеки
     sensor_ = new CapacitiveSensor(send_pin_, receive_pin_);
-    sensor_->set_CS_Timeout_Millis(timeout_ms_);
-    sensor_->set_CS_AutocaL_Millis(0xFFFFFFFF);
+    
+    // Настройка параметров
+    CapacitiveSensor *capSensor = static_cast<CapacitiveSensor*>(sensor_);
+    capSensor->set_CS_Timeout_Millis(timeout_ms_);
+    capSensor->set_CS_AutocaL_Millis(0xFFFFFFFF);
     
     ESP_LOGCONFIG(TAG, "Sensor initialized with send pin GPIO%u, receive pin GPIO%u", 
                   send_pin_, receive_pin_);
@@ -26,7 +35,10 @@ void CapacitiveWaterSensor::update() {
         return;
     }
 
-    long reading_raw = sensor_->capacitiveSensorRaw(samples_);
+    CapacitiveSensor *capSensor = static_cast<CapacitiveSensor*>(sensor_);
+    
+    // Уменьшаем количество семплов для отладки
+    long reading_raw = capSensor->capacitiveSensorRaw(samples_);
     float mapped_value;
 
     if (reading_raw == -2) {
@@ -36,11 +48,17 @@ void CapacitiveWaterSensor::update() {
         mapped_value = 0.0f;
         ESP_LOGD(TAG, "Sensor error or dry - raw: %ld", reading_raw);
     } else {
-        mapped_value = clamp(
-            map(reading_raw, min_raw_, max_raw_, 0.0f, 120.0f),
-            0.0f, 120.0f
-        );
-        ESP_LOGD(TAG, "Normal reading - raw: %ld, mapped: %.1f", reading_raw, mapped_value);
+        // Исправляем проблему с clamp - приводим все к одному типу
+        float raw_float = static_cast<float>(reading_raw);
+        float min_float = static_cast<float>(min_raw_);
+        float max_float = static_cast<float>(max_raw_);
+        
+        // Вычисляем маппинг вручную вместо использования clamp
+        float mapped = (raw_float - min_float) / (max_float - min_float) * 120.0f;
+        mapped_value = std::max(0.0f, std::min(120.0f, mapped));
+        
+        ESP_LOGD(TAG, "Normal reading - raw: %ld, raw_float: %.1f, min: %.1f, max: %.1f, mapped: %.1f", 
+                 reading_raw, raw_float, min_float, max_float, mapped_value);
     }
 
     publish_state(mapped_value);
