@@ -8,7 +8,6 @@ from esphome.const import (
     STATE_CLASS_MEASUREMENT,
     UNIT_EMPTY
 )
-from esphome.core import CORE
 
 # Определение конфигурационных констант
 CONF_SEND_PIN = "send_pin"
@@ -65,9 +64,4 @@ async def to_code(config):
     cg.add(var.set_shorted_value(config[CONF_SHORTED_VALUE]))
     cg.add(var.set_timeout_ms(config[CONF_TIMEOUT]))
     
-    # Добавляем библиотеку CapacitiveSensor
-    cg.add_library("PaulStoffregen/CapacitiveSensor", "0.5.1")
-    
-    # Добавляем необходимые define для ESP32
-    if CORE.is_esp32:
-        cg.add_define("ESP32")
+    # Убираем cg.add_library - теперь используем свою реализацию
