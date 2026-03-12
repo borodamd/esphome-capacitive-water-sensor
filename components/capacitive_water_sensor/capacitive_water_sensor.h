@@ -2,18 +2,14 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/uart/uart.h" // Добавляем UART
 #include <CapacitiveSensor.h>
-
-// Пробуем включить HardwareSerial напрямую
-#include <Arduino.h>
-#include <HardwareSerial.h> 
-
 #include <memory>
 
 namespace esphome {
 namespace capacitive_water_sensor {
 
-class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor {
+class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor, public uart::UARTDevice {
  public:
   void set_pins(int sender, int sensor) { sender_pin_ = sender; sensor_pin_ = sensor; }
   void setup() override;
