@@ -20,6 +20,50 @@ void CapacitiveWaterSensor::setup() {
     ESP_LOGCONFIG(TAG, "  Send Pin: GPIO%u", send_pin_);
     ESP_LOGCONFIG(TAG, "  Receive Pin: GPIO%u", receive_pin_);
 }
+
+long CapacitiveWaterSensor::readCapacitiveSensor() {
+    long total = 0;
+    int timeout_count = 0;
+    unsigned long timeout_us = timeout_ms_ * 1000UL;
+    
+    for (uint32_t i = 0; i < samples_; i++) {
+        pinMode(receive_pin_, OUTPUT);
+        digitalWrite(receive_pin_, LOW);
+        delayMicroseconds(10);
+        pinMode(receive_pin_, INPUT);
+        
+        digitalWrite(send_pin_, HIGH);
+        
+        unsigned long start = micros();
+        unsigned long now = start;
+        
+        while (digitalRead(receive_pin_) == LOW) {
+            now = micros();
+            if (now - start > timeout_us) {
+                timeout_count++;
+                break;
+            }
+        }
+        
+        digitalWrite(send_pin_, LOW);
+        
+        if (now - start <= timeout_us) {
+            total += (now - start);
+        }
+        
+        delayMicroseconds(50);
+    }
+    
+    if (timeout_count == samples_) {
+        return -2;
+    } else if (total < 100) {
+        return 0;
+    } else {
+        return total / samples_;
+    }
+}
+
+// ⚠️ ТОЛЬКО ОДНО ОПРЕДЕЛЕНИЕ этой функции!
 float CapacitiveWaterSensor::mapWithThreshold(long raw_value) {
     // Для отладки всегда логируем
     ESP_LOGI(TAG, "mapWithThreshold input: raw=%ld", raw_value);
@@ -64,80 +108,6 @@ float CapacitiveWaterSensor::mapWithThreshold(long raw_value) {
     ESP_LOGI(TAG, "  → OUT OF RANGE: raw=%ld, threshold=%u", 
              raw_value, dry_threshold_);
     return 0.0f;
-}
-long CapacitiveWaterSensor::readCapacitiveSensor() {
-    long total = 0;
-    int timeout_count = 0;
-    unsigned long timeout_us = timeout_ms_ * 1000UL;
-    
-    for (uint32_t i = 0; i < samples_; i++) {
-        // Разряжаем receive пин
-        pinMode(receive_pin_, OUTPUT);
-        digitalWrite(receive_pin_, LOW);
-        delayMicroseconds(10);
-        pinMode(receive_pin_, INPUT);
-        
-        // Отправляем импульс
-        digitalWrite(send_pin_, HIGH);
-        
-        // Измеряем время
-        unsigned long start = micros();
-        unsigned long now = start;
-        
-        while (digitalRead(receive_pin_) == LOW) {
-            now = micros();
-            if (now - start > timeout_us) {
-                timeout_count++;
-                break;
-            }
-        }
-        
-        digitalWrite(send_pin_, LOW);
-        
-        // Если не было таймаута, добавляем к total
-        if (now - start <= timeout_us) {
-            total += (now - start);
-        }
-        
-        // Короткая пауза
-        delayMicroseconds(50);
-    }
-    
-    if (timeout_count == samples_) {
-        return -2;  // Все измерения с таймаутом
-    } else if (total < 100) {
-        return 0;   // Очень маленькие значения
-    } else {
-        return total / samples_;
-    }
-}
-
-float CapacitiveWaterSensor::mapWithThreshold(long raw_value) {
-    if (!use_soft_threshold_) {
-        // Старая логика (без порога)
-        if (raw_value == -2) return 0.0f;
-        if (raw_value == 0) return static_cast<float>(shorted_value_);
-        return 120.0f - ((raw_value - wet_min_raw_) / (float)(wet_max_raw_ - wet_min_raw_)) * 120.0f;
-    }
-    
-    // Новая логика с софтовым порогом
-    if (raw_value == -2) {
-        // Сухой датчик
-        return 0.0f;
-    }
-    else if (raw_value < dry_threshold_) {
-        // Мокрый датчик (значение меньше порога)
-        if (raw_value <= 0) {
-            return static_cast<float>(shorted_value_);  // Полный
-        }
-        // Пропорциональное значение от dry_threshold_ до 0
-        float progress = 1.0f - ((float)raw_value / dry_threshold_);
-        return progress * shorted_value_;
-    }
-    else {
-        // Очень сухо (выше порога) - считаем сухим
-        return 0.0f;
-    }
 }
 
 void CapacitiveWaterSensor::update() {
