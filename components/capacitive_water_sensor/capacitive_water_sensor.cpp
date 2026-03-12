@@ -63,15 +63,13 @@ long CapacitiveWaterSensor::readCapacitiveSensor() {
     }
 }
 
-// ⚠️ ТОЛЬКО ОДНО ОПРЕДЕЛЕНИЕ этой функции!
 float CapacitiveWaterSensor::mapWithThreshold(long raw_value) {
     // Для отладки всегда логируем
     ESP_LOGI(TAG, "mapWithThreshold input: raw=%ld", raw_value);
     
-    // Сухой датчик - только когда действительно сухо и нет контакта с водой
+    // Сухой датчик
     if (raw_value == -2) {
         // Проверяем, может это все-таки вода?
-        // Сделаем небольшую задержку и проверим еще раз
         delay(10);
         long check = readCapacitiveSensor();
         if (check == -2) {
@@ -83,20 +81,23 @@ float CapacitiveWaterSensor::mapWithThreshold(long raw_value) {
         }
     }
     
-    // Теперь работаем с реальными значениями
-    if (raw_value < dry_threshold_ && raw_value > 0) {
+    // RAW=0 - это МОКРО! (максимальная вода)
+    if (raw_value == 0) {
+        float result = static_cast<float>(shorted_value_); // 125
+        ESP_LOGI(TAG, "  → MAX WET (raw=0) - value: %.1f", result);
+        return result;
+    }
+    
+    // Промежуточные значения
+    if (raw_value > 0 && raw_value < dry_threshold_) {
         // Вода есть - маппинг от dry_threshold_ до 0
         float min_val = static_cast<float>(dry_threshold_);
-        float max_val = 0.0f;
         float raw = static_cast<float>(raw_value);
         
         // Инвертируем: чем меньше RAW, тем больше воды
         float progress = (min_val - raw) / min_val;
         if (progress < 0) progress = 0;
         if (progress > 1) progress = 1;
-        
-        // Добавляем нелинейность для более плавного начала
-        // progress = pow(progress, 0.7); // Раскомментируйте для нелинейности
         
         float result = progress * shorted_value_;
         ESP_LOGI(TAG, "  → WET: raw=%ld, progress=%.2f, result=%.1f", 
