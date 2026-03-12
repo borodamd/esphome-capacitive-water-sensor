@@ -20,7 +20,51 @@ void CapacitiveWaterSensor::setup() {
     ESP_LOGCONFIG(TAG, "  Send Pin: GPIO%u", send_pin_);
     ESP_LOGCONFIG(TAG, "  Receive Pin: GPIO%u", receive_pin_);
 }
-
+float CapacitiveWaterSensor::mapWithThreshold(long raw_value) {
+    // Для отладки всегда логируем
+    ESP_LOGI(TAG, "mapWithThreshold input: raw=%ld", raw_value);
+    
+    // Сухой датчик - только когда действительно сухо и нет контакта с водой
+    if (raw_value == -2) {
+        // Проверяем, может это все-таки вода?
+        // Сделаем небольшую задержку и проверим еще раз
+        delay(10);
+        long check = readCapacitiveSensor();
+        if (check == -2) {
+            ESP_LOGI(TAG, "  → Confirmed DRY (raw=%ld, check=%ld)", raw_value, check);
+            return 0.0f;
+        } else {
+            ESP_LOGI(TAG, "  → False DRY, real raw=%ld", check);
+            raw_value = check;
+        }
+    }
+    
+    // Теперь работаем с реальными значениями
+    if (raw_value < dry_threshold_ && raw_value > 0) {
+        // Вода есть - маппинг от dry_threshold_ до 0
+        float min_val = static_cast<float>(dry_threshold_);
+        float max_val = 0.0f;
+        float raw = static_cast<float>(raw_value);
+        
+        // Инвертируем: чем меньше RAW, тем больше воды
+        float progress = (min_val - raw) / min_val;
+        if (progress < 0) progress = 0;
+        if (progress > 1) progress = 1;
+        
+        // Добавляем нелинейность для более плавного начала
+        // progress = pow(progress, 0.7); // Раскомментируйте для нелинейности
+        
+        float result = progress * shorted_value_;
+        ESP_LOGI(TAG, "  → WET: raw=%ld, progress=%.2f, result=%.1f", 
+                 raw_value, progress, result);
+        return result;
+    }
+    
+    // Если значение вне диапазона - сухо
+    ESP_LOGI(TAG, "  → OUT OF RANGE: raw=%ld, threshold=%u", 
+             raw_value, dry_threshold_);
+    return 0.0f;
+}
 long CapacitiveWaterSensor::readCapacitiveSensor() {
     long total = 0;
     int timeout_count = 0;
