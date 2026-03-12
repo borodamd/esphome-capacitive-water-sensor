@@ -82,27 +82,29 @@ void CapacitiveWaterSensor::update() {
     ESP_LOGI(TAG, "RAW reading: %ld, samples: %u", reading_raw, samples_);
 
     if (reading_raw == -2) {
-        // Короткое замыкание - вода касается обоих щупов
-        mapped_value = static_cast<float>(shorted_value_);
-        ESP_LOGI(TAG, "  → SHORTED CIRCUIT (full tank) - value: %.1f", mapped_value);
+        // Раньше это было "короткое замыкание", но для вашего датчика это СУХО
+        mapped_value = 0.0f;  // Сухой бак
+        ESP_LOGI(TAG, "  → DRY (was SHORTED) - value: 0");
     } else if (reading_raw == 0) {
-        // Сухой датчик
-        mapped_value = 0.0f;
-        ESP_LOGI(TAG, "  → DRY - value: 0");
+        // Раньше это было "сухо", но для вашего датчика это МОКРО/ЗАМЫКАНИЕ
+        mapped_value = static_cast<float>(shorted_value_); // 125 - Полный бак
+        ESP_LOGI(TAG, "  → FULL/WET (was DRY) - value: %.1f", mapped_value);
     } else {
-        // Нормальное измерение - есть вода, но нет замыкания
+        // Нормальное измерение - воду видим, но инвертируем результат?
+        // Пока оставим как есть, или тоже можно инвертировать
         float raw_float = static_cast<float>(reading_raw);
         float min_float = static_cast<float>(min_raw_);
         float max_float = static_cast<float>(max_raw_);
-        
+
         if (max_float <= min_float) {
             max_float = min_float + 1.0f;
         }
-        
-        float mapped = (raw_float - min_float) / (max_float - min_float) * 120.0f;
+
+        // Инвертируем маппинг: большое сырое значение -> малый уровень воды
+        float mapped = 120.0f - (raw_float - min_float) / (max_float - min_float) * 120.0f;
         mapped_value = std::max(0.0f, std::min(120.0f, mapped));
-        
-        ESP_LOGI(TAG, "  → NORMAL - raw: %ld, min: %.0f, max: %.0f, mapped: %.1f", 
+
+        ESP_LOGI(TAG, "  → NORMAL (inverted) - raw: %ld, min: %.0f, max: %.0f, mapped: %.1f",
                  reading_raw, min_float, max_float, mapped_value);
     }
 
