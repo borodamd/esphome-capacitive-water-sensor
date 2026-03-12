@@ -9,22 +9,20 @@ from esphome.const import (
     UNIT_EMPTY
 )
 
-# Константы
+# Константы конфигурации
 CONF_SEND_PIN = "send_pin"
 CONF_RECEIVE_PIN = "receive_pin"
 CONF_NUM_SAMPLES = "num_samples"
-CONF_TIMEOUT = "timeout_ms"
-CONF_USE_SOFT_THRESHOLD = "use_soft_threshold"
-CONF_DRY_THRESHOLD = "dry_threshold"
-CONF_WET_MIN_RAW = "wet_min_raw"
-CONF_WET_MAX_RAW = "wet_max_raw"
+CONF_TIMEOUT_MS = "timeout_ms"
 CONF_SHORTED_VALUE = "shorted_value"
 
+# Пространство имен
 capacitive_water_sensor_ns = cg.esphome_ns.namespace("capacitive_water_sensor")
 CapacitiveWaterSensor = capacitive_water_sensor_ns.class_(
     "CapacitiveWaterSensor", sensor.Sensor, cg.PollingComponent
 )
 
+# Схема конфигурации
 CONFIG_SCHEMA = sensor.sensor_schema(
     CapacitiveWaterSensor,
     accuracy_decimals=1,
@@ -35,16 +33,13 @@ CONFIG_SCHEMA = sensor.sensor_schema(
     cv.GenerateID(): cv.declare_id(CapacitiveWaterSensor),
     cv.Required(CONF_SEND_PIN): cv.int_,
     cv.Required(CONF_RECEIVE_PIN): cv.int_,
-    cv.Optional(CONF_NUM_SAMPLES, default=10): cv.int_range(min=5, max=30),
-    cv.Optional(CONF_TIMEOUT, default=100): cv.int_range(min=50, max=300),
-    cv.Optional(CONF_USE_SOFT_THRESHOLD, default=True): cv.boolean,
-    cv.Optional(CONF_DRY_THRESHOLD, default=300): cv.int_range(min=100, max=1000),
-    cv.Optional(CONF_WET_MIN_RAW, default=0): cv.int_,
-    cv.Optional(CONF_WET_MAX_RAW, default=300): cv.int_,
+    cv.Optional(CONF_NUM_SAMPLES, default=200): cv.int_range(min=10, max=1000),
+    cv.Optional(CONF_TIMEOUT_MS, default=500): cv.int_range(min=50, max=2000),
     cv.Optional(CONF_SHORTED_VALUE, default=125): cv.int_range(min=100, max=255),
-}).extend(cv.polling_component_schema("3s"))
+}).extend(cv.polling_component_schema("2s"))
 
 async def to_code(config):
+    """Генерация C++ кода"""
     var = cg.new_Pvariable(
         config[CONF_ID],
         config[CONF_SEND_PIN],
@@ -56,9 +51,8 @@ async def to_code(config):
     await sensor.register_sensor(var, config)
     
     cg.add(var.set_num_samples(config[CONF_NUM_SAMPLES]))
-    cg.add(var.set_timeout_ms(config[CONF_TIMEOUT]))
-    cg.add(var.set_use_soft_threshold(config[CONF_USE_SOFT_THRESHOLD]))
-    cg.add(var.set_dry_threshold(config[CONF_DRY_THRESHOLD]))
-    cg.add(var.set_wet_min_raw(config[CONF_WET_MIN_RAW]))
-    cg.add(var.set_wet_max_raw(config[CONF_WET_MAX_RAW]))
+    cg.add(var.set_timeout_ms(config[CONF_TIMEOUT_MS]))
     cg.add(var.set_shorted_value(config[CONF_SHORTED_VALUE]))
+    
+    # Добавляем библиотеку CapacitiveSensor
+    cg.add_library("PaulStoffregen/CapacitiveSensor", "0.5.1")
