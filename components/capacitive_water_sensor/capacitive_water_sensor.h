@@ -2,8 +2,8 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/uart/uart.h" // Добавляем UART
-#include <CapacitiveSensor.h>
+#include "esphome/components/uart/uart.h"
+#include "CapacitiveSensor.h"
 #include <memory>
 
 namespace esphome {
