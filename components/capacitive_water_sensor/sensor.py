@@ -3,7 +3,6 @@ import esphome.config_validation as cv
 from esphome.components import sensor, uart
 from esphome.const import CONF_ID, STATE_CLASS_MEASUREMENT, UNIT_EMPTY
 
-# Указываем, что нам НУЖЕН UART
 DEPENDENCIES = ["uart"]
 
 capacitive_water_sensor_ns = cg.esphome_ns.namespace("capacitive_water_sensor")
@@ -26,10 +25,6 @@ def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     yield cg.register_component(var, config)
     yield sensor.register_sensor(var, config)
-    yield uart.register_uart_device(var, config) # Регистрируем UART
+    yield uart.register_uart_device(var, config)
 
     cg.add(var.set_pins(config["sender_pin"], config["sensor_pin"]))
-    cg.add_library(
-        "CapacitiveSensor=https://github.com/pfeffersand/CapacitiveSensor/archive/refs/heads/master.zip", 
-        None
-    )
