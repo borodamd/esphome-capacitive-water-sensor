@@ -59,16 +59,40 @@ long CapacitiveWaterSensor::readCapacitiveSensor() {
         delayMicroseconds(50);
     }
     
-    // Логика определения состояний
     if (timeout_count == samples_) {
-        // Все измерения с таймаутом - это короткое замыкание (вода касается обоих щупов)
-        return -2;
+        return -2;  // Все измерения с таймаутом
     } else if (total < 100) {
-        // Очень маленькие значения - сухой датчик
-        return 0;
+        return 0;   // Очень маленькие значения
     } else {
-        // Нормальное измерение
         return total / samples_;
+    }
+}
+
+float CapacitiveWaterSensor::mapWithThreshold(long raw_value) {
+    if (!use_soft_threshold_) {
+        // Старая логика (без порога)
+        if (raw_value == -2) return 0.0f;
+        if (raw_value == 0) return static_cast<float>(shorted_value_);
+        return 120.0f - ((raw_value - wet_min_raw_) / (float)(wet_max_raw_ - wet_min_raw_)) * 120.0f;
+    }
+    
+    // Новая логика с софтовым порогом
+    if (raw_value == -2) {
+        // Сухой датчик
+        return 0.0f;
+    }
+    else if (raw_value < dry_threshold_) {
+        // Мокрый датчик (значение меньше порога)
+        if (raw_value <= 0) {
+            return static_cast<float>(shorted_value_);  // Полный
+        }
+        // Пропорциональное значение от dry_threshold_ до 0
+        float progress = 1.0f - ((float)raw_value / dry_threshold_);
+        return progress * shorted_value_;
+    }
+    else {
+        // Очень сухо (выше порога) - считаем сухим
+        return 0.0f;
     }
 }
 
@@ -76,37 +100,10 @@ void CapacitiveWaterSensor::update() {
     unsigned long start_time = millis();
     
     long reading_raw = readCapacitiveSensor();
-    float mapped_value;
+    float mapped_value = mapWithThreshold(reading_raw);
 
-    // Подробное логирование
-    ESP_LOGI(TAG, "RAW reading: %ld, samples: %u", reading_raw, samples_);
-
-    if (reading_raw == -2) {
-        // Раньше это было "короткое замыкание", но для вашего датчика это СУХО
-        mapped_value = 0.0f;  // Сухой бак
-        ESP_LOGI(TAG, "  → DRY (was SHORTED) - value: 0");
-    } else if (reading_raw == 0) {
-        // Раньше это было "сухо", но для вашего датчика это МОКРО/ЗАМЫКАНИЕ
-        mapped_value = static_cast<float>(shorted_value_); // 125 - Полный бак
-        ESP_LOGI(TAG, "  → FULL/WET (was DRY) - value: %.1f", mapped_value);
-    } else {
-        // Нормальное измерение - воду видим, но инвертируем результат?
-        // Пока оставим как есть, или тоже можно инвертировать
-        float raw_float = static_cast<float>(reading_raw);
-        float min_float = static_cast<float>(min_raw_);
-        float max_float = static_cast<float>(max_raw_);
-
-        if (max_float <= min_float) {
-            max_float = min_float + 1.0f;
-        }
-
-        // Инвертируем маппинг: большое сырое значение -> малый уровень воды
-        float mapped = 120.0f - (raw_float - min_float) / (max_float - min_float) * 120.0f;
-        mapped_value = std::max(0.0f, std::min(120.0f, mapped));
-
-        ESP_LOGI(TAG, "  → NORMAL (inverted) - raw: %ld, min: %.0f, max: %.0f, mapped: %.1f",
-                 reading_raw, min_float, max_float, mapped_value);
-    }
+    ESP_LOGI(TAG, "RAW: %ld → Value: %.1f (samples: %u, timeout: %ums)", 
+             reading_raw, mapped_value, samples_, timeout_ms_);
 
     publish_state(mapped_value);
     
@@ -122,6 +119,8 @@ void CapacitiveWaterSensor::dump_config() {
     ESP_LOGCONFIG(TAG, "  Receive Pin: GPIO%u", receive_pin_);
     ESP_LOGCONFIG(TAG, "  Samples: %u", samples_);
     ESP_LOGCONFIG(TAG, "  Timeout: %u ms", timeout_ms_);
+    ESP_LOGCONFIG(TAG, "  Soft Threshold: %s", use_soft_threshold_ ? "YES" : "NO");
+    ESP_LOGCONFIG(TAG, "  Dry Threshold: %u", dry_threshold_);
     LOG_UPDATE_INTERVAL(this);
 }
 
