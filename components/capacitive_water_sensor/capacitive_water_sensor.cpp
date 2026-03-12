@@ -1,41 +1,45 @@
-#include "capacitive_water_sensor.h"
-#include "esphome/core/log.h"
+#include "CapacitiveSensor.h"
 
-namespace esphome {
-namespace capacitive_water_sensor {
-
-static const char *const TAG = "capacitive_water_sensor";
-
-void CapacitiveWaterSensor::setup() {
-  sensor_impl_ = std::make_unique<CapacitiveSensor>(sender_pin_, sensor_pin_);
-  sensor_impl_->set_CS_AutocaL_Millis(0xFFFFFFFF);
-  sensor_impl_->set_CS_Timeout_Millis(500);
+CapacitiveSensor::CapacitiveSensor(uint8_t sendPin, uint8_t receivePin) {
+    uint8_t sPort = digitalPinToPort(sendPin);
+    uint8_t rPort = digitalPinToPort(receivePin);
+    if (sPort == NOT_A_PORT || rPort == NOT_A_PORT) { error = -1; return; }
+    sBit = digitalPinToBitMask(sendPin);
+    sReg = portModeRegister(sPort);
+    sOut = portOutputRegister(sPort);
+    rBit = digitalPinToBitMask(receivePin);
+    rReg = portModeRegister(rPort);
+    rOut = portOutputRegister(rPort);
+    rIn  = portInputRegister(rPort);
+    lastCal = millis();
 }
 
-void CapacitiveWaterSensor::update() {
-  // 100 сэмплов достаточно для теста
-  long reading_raw = sensor_impl_->capacitiveSensorRaw(100); 
-  
-  uint8_t mapped_value;
-  if (reading_raw == -2) {
-    mapped_value = 125;
-  } else {
-    long val = reading_raw;
-    // Калибровочные значения
-    if (val < 4200) val = 4200;
-    if (val > 11000) val = 11000;
-    mapped_value = (uint8_t)((val - 4200) * 120 / (11000 - 4200));
-  }
-
-  packet_[11] = mapped_value;
-  uint8_t checksum = 0;
-  for (int i = 0; i < 42; i++) checksum ^= packet_[i];
-  checksum ^= 0xA0;
-  packet_[42] = checksum;
-
-  this->write_array(packet_, 43);
-  this->publish_state(reading_raw);
+long CapacitiveSensor::capacitiveSensorRaw(uint8_t samples) {
+    total = 0;
+    if (error < 0) return -1;
+    for (uint8_t i = 0; i < samples; i++) {
+        *sOut &= ~sBit; *rReg |= rBit; *rOut &= ~rBit; *rReg &= ~rBit;
+        while (*rIn & rBit && (millis() - lastCal < CS_Timeout_Millis));
+        *sOut |= sBit;
+        int cycle = 0;
+        while (!(*rIn & rBit) && (cycle < CS_Timeout_Millis)) { cycle++; }
+        if (cycle >= CS_Timeout_Millis) return -2;
+        total += cycle;
+    }
+    return total;
 }
 
-}  // namespace capacitive_water_sensor
-}  // namespace esphome
+long CapacitiveSensor::capacitiveSensor(uint8_t samples) {
+    long total = capacitiveSensorRaw(samples);
+    if (total < 0) return total;
+    // Исправленная строка с приведением типа для abs()
+    if ((millis() - lastCal > CS_AutocaL_Millis) && std::abs((long)(total - leastTotal)) < (int)(.10 * (float)leastTotal)) {
+        leastTotal = 0x0FFFFFFFL; lastCal = millis();
+    }
+    if (total < leastTotal) leastTotal = total;
+    return total - leastTotal;
+}
+
+void CapacitiveSensor::set_CS_Timeout_Millis(unsigned long timeout_millis) { CS_Timeout_Millis = timeout_millis; }
+void CapacitiveSensor::set_CS_AutocaL_Millis(unsigned long autoCal_millis) { CS_AutocaL_Millis = autoCal_millis; }
+unsigned long total;
