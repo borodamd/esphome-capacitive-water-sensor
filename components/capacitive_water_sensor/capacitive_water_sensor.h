@@ -1,89 +1,35 @@
-/*
-  CapacitiveSensor.h v.04 - Capacitive Sensing Library for 'duino / Wiring
-  https://github.com/PaulStoffregen/CapacitiveSensor
-  http://www.pjrc.com/teensy/td_libs_CapacitiveSensor.html
-  http://playground.arduino.cc/Main/CapacitiveSensor
-  Copyright (c) 2009 Paul Bagder  All right reserved.
-  Version 2015-03-15 - Paul Stoffregen - added interface to allow any pins
+#pragma once
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
+#include "esphome/core/component.h"
+#include "esphome/core/hal.h"
+#include "esphome/components/sensor/sensor.h"
 
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
+// Просто объявляем класс, не включая CapacitiveSensor.h
+namespace esphome {
+namespace capacitive_water_sensor {
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
+class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor {
+ public:
+  CapacitiveWaterSensor(uint8_t send_pin, uint8_t receive_pin, uint32_t update_interval_ms);
 
-#ifndef CapacitiveSensor_h
-#define CapacitiveSensor_h
+  void setup() override;
+  void update() override;
+  void dump_config() override;
 
-#if defined(ARDUINO) && ARDUINO >= 100
-#include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
+  void set_num_samples(uint16_t samples) { samples_ = samples; }
+  void set_timeout_ms(uint16_t timeout) { timeout_ms_ = timeout; }
+  void set_shorted_value(uint8_t value) { shorted_value_ = value; }
 
-// -----------------------------------------------------------------------------
-// ----- Pin mapping constants, beyond this point -----
-#if defined(__AVR__)
-#define IO_REG_TYPE uint8_t
-#endif
-
-#if defined(__PIC32MX__)
-#define IO_REG_TYPE uint32_t
-#endif
-
-#if defined(ESP8266) || defined(ESP32)
-#define IO_REG_TYPE uint32_t
-#endif
-
-// -----------------------------------------------------------------------------
-
-class CapacitiveSensor
-{
-  public:
-    // Constructor
-    CapacitiveSensor(uint8_t sendPin, uint8_t receivePin);
-    
-    // Public methods
-    long capacitiveSensor(uint8_t samples);
-    long capacitiveSensorRaw(uint8_t samples);
-    void reset_CS_AutoCal(void);
-    void set_CS_AutocaL_Millis(unsigned long time);
-    void set_CS_Timeout_Millis(unsigned long time);
-    
-  private:
-    // Private methods
-    int CycleThis(void);
-    
-    // Private variables
-    unsigned long total;
-    unsigned long total1;
-    unsigned int reg;
-    unsigned long leastTotal;
-    unsigned long lastCal;
-    unsigned long CS_Timeout_Millis;
-    unsigned long CS_AutocaL_Millis;
-    int timeout;
-    int timeoutOccurred;
-    unsigned int loopTimingFactor;
-    int error;
-    
-    // Pin mapping
-    IO_REG_TYPE sBit;
-    volatile IO_REG_TYPE *sReg;
-    volatile IO_REG_TYPE *sOut;
-    IO_REG_TYPE rBit;
-    volatile IO_REG_TYPE *rReg;
-    volatile IO_REG_TYPE *rIn;
-    volatile IO_REG_TYPE *rOut;
+ protected:
+  uint8_t send_pin_;
+  uint8_t receive_pin_;
+  uint16_t samples_{200};
+  uint16_t timeout_ms_{500};
+  uint8_t shorted_value_{125};
+  
+  void *sensor_;  // Указатель на CapacitiveSensor (void* чтобы не требовать заголовок)
+  long readCapacitiveSensor();
 };
 
-#endif
+}  // namespace capacitive_water_sensor
+}  // namespace esphome
