@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome.components import sensor
 from esphome.const import CONF_ID, STATE_CLASS_MEASUREMENT, UNIT_EMPTY
 
-DEPENDENCIES = []
+DEPENDENCIES = ["uart"]
 
 capacitive_water_sensor_ns = cg.esphome_ns.namespace("capacitive_water_sensor")
 CapacitiveWaterSensor = capacitive_water_sensor_ns.class_(
@@ -31,3 +31,5 @@ def to_code(config):
     # ПРИНУДИТЕЛЬНО включаем флаг Arduino и библиотеку
     cg.add_define("USE_ARDUINO") 
     cg.add_library("CapacitiveSensor", None)
+    uart_parent = yield cg.get_variable(config["uart_id"])
+    cg.add(var.set_uart_bus(uart_parent))
