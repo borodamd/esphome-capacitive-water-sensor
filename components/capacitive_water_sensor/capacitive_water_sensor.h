@@ -1,34 +1,24 @@
 #pragma once
 
 #include "esphome/core/component.h"
-#include "esphome/core/hal.h"
 #include "esphome/components/sensor/sensor.h"
+#include <CapacitiveSensor.h>
+#include <memory>
 
-// Просто объявляем класс, не включая CapacitiveSensor.h
 namespace esphome {
 namespace capacitive_water_sensor {
 
 class CapacitiveWaterSensor : public PollingComponent, public sensor::Sensor {
  public:
-  CapacitiveWaterSensor(uint8_t send_pin, uint8_t receive_pin, uint32_t update_interval_ms);
-
+  void set_pins(int sender, int sensor) { sender_pin_ = sender; sensor_pin_ = sensor; }
   void setup() override;
   void update() override;
-  void dump_config() override;
-
-  void set_num_samples(uint16_t samples) { samples_ = samples; }
-  void set_timeout_ms(uint16_t timeout) { timeout_ms_ = timeout; }
-  void set_shorted_value(uint8_t value) { shorted_value_ = value; }
 
  protected:
-  uint8_t send_pin_;
-  uint8_t receive_pin_;
-  uint16_t samples_{200};
-  uint16_t timeout_ms_{500};
-  uint8_t shorted_value_{125};
-  
-  void *sensor_;  // Указатель на CapacitiveSensor (void* чтобы не требовать заголовок)
-  long readCapacitiveSensor();
+  int sender_pin_;
+  int sensor_pin_;
+  std::unique_ptr<CapacitiveSensor> sensor_impl_;
+  uint8_t packet_[43] = {0xFA, 0x29, 0x03, 0x00, 0x00, 0x00, 0x00, 0x14, 0x9A, 0x00, 0x00, 0x00, 0x03, 0x77, 0x72, 0x71, 0x03, 0x00, 0x6C, 0x4C, 0x3B, 0x03, 0x2F, 0x15, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00, 0x03, 0xE8, 0x00, 0x2C, 0x02, 0x6D, 0x37, 0xD2, 0x00};
 };
 
 }  // namespace capacitive_water_sensor
