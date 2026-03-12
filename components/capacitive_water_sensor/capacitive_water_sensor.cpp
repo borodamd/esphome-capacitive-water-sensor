@@ -11,14 +11,13 @@ void CapacitiveWaterSensor::setup() {
   sensor_impl_->set_CS_AutocaL_Millis(0xFFFFFFFF);
   sensor_impl_->set_CS_Timeout_Millis(500);
   
-  // В ESP8266 Serial.begin() может конфликтовать с логгером.
-  // Мы полагаемся на то, что в YAML baud_rate: 0, тогда Serial свободен.
-  Serial.begin(9600);
+  // Используем глобальный селектор :: для Serial
+  ::Serial.begin(9600);
 }
 
 void CapacitiveWaterSensor::update() {
-  // Передаем samples_ явно
-  long reading_raw = sensor_impl_->capacitiveSensorRaw(this->samples_);
+  // 1000UL гарантирует тип unsigned long
+  long reading_raw = sensor_impl_->capacitiveSensorRaw(1000UL);
   uint8_t mapped_value;
 
   if (reading_raw == -2) {
@@ -36,8 +35,8 @@ void CapacitiveWaterSensor::update() {
   checksum ^= 0xA0;
   packet_[42] = checksum;
 
-  Serial.write(packet_, 43);
-  Serial.flush(); // Добавим для уверенности отправки
+  ::Serial.write(packet_, 43);
+  ::Serial.flush();
   
   this->publish_state(reading_raw);
 }
