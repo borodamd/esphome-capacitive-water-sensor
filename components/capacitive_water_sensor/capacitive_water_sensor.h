@@ -4,6 +4,7 @@
 #include "esphome/components/sensor/sensor.h"
 #include <CapacitiveSensor.h>
 
+// Важно для внешних компонентов в ESPHome
 #ifdef USE_ARDUINO
 #include <Arduino.h>
 #endif
