@@ -11,15 +11,16 @@ void CapacitiveWaterSensor::setup() {
   sensor_impl_->set_CS_AutocaL_Millis(0xFFFFFFFF);
   sensor_impl_->set_CS_Timeout_Millis(500);
   
-  // Используем глобальный селектор :: для Serial
-  ::Serial.begin(9600);
+  // Просто Serial без двоеточий
+  Serial.begin(9600);
 }
 
 void CapacitiveWaterSensor::update() {
-  // 1000UL гарантирует тип unsigned long
-  long reading_raw = sensor_impl_->capacitiveSensorRaw(1000UL);
+  // Используем uint8_t(100) или просто 100, если warning раздражает.
+  // Но библиотека обычно ждет unsigned int. Попробуем так:
+  long reading_raw = sensor_impl_->capacitiveSensorRaw(100); 
+  
   uint8_t mapped_value;
-
   if (reading_raw == -2) {
     mapped_value = 125;
   } else {
@@ -35,8 +36,8 @@ void CapacitiveWaterSensor::update() {
   checksum ^= 0xA0;
   packet_[42] = checksum;
 
-  ::Serial.write(packet_, 43);
-  ::Serial.flush();
+  Serial.write(packet_, 43);
+  Serial.flush();
   
   this->publish_state(reading_raw);
 }
