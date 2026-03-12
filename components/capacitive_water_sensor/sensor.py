@@ -27,4 +27,7 @@ def to_code(config):
     yield sensor.register_sensor(var, config)
 
     cg.add(var.set_pins(config["sender_pin"], config["sensor_pin"]))
+    
+    # ПРИНУДИТЕЛЬНО включаем флаг Arduino и библиотеку
+    cg.add_define("USE_ARDUINO") 
     cg.add_library("CapacitiveSensor", None)
