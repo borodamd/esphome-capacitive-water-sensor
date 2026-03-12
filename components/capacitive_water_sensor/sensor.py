@@ -29,4 +29,7 @@ def to_code(config):
     yield uart.register_uart_device(var, config) # Регистрируем UART
 
     cg.add(var.set_pins(config["sender_pin"], config["sensor_pin"]))
-    cg.add_library("https://github.com/leandromoreira/CapacitiveSensor.git", None)
+    cg.add_library(
+        "CapacitiveSensor=https://github.com/pfeffersand/CapacitiveSensor/archive/refs/heads/master.zip", 
+        None
+    )
