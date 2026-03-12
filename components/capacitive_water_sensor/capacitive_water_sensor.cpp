@@ -10,10 +10,10 @@ void CapacitiveWaterSensor::setup() {
   sensor_impl_ = std::make_unique<CapacitiveSensor>(sender_pin_, sensor_pin_);
   sensor_impl_->set_CS_AutocaL_Millis(0xFFFFFFFF);
   sensor_impl_->set_CS_Timeout_Millis(500);
-  // Serial.begin больше не нужен, ESPHome настроит UART сам
 }
 
 void CapacitiveWaterSensor::update() {
+  // 100 сэмплов достаточно для теста
   long reading_raw = sensor_impl_->capacitiveSensorRaw(100); 
   
   uint8_t mapped_value;
@@ -21,6 +21,7 @@ void CapacitiveWaterSensor::update() {
     mapped_value = 125;
   } else {
     long val = reading_raw;
+    // Калибровочные значения
     if (val < 4200) val = 4200;
     if (val > 11000) val = 11000;
     mapped_value = (uint8_t)((val - 4200) * 120 / (11000 - 4200));
@@ -32,9 +33,7 @@ void CapacitiveWaterSensor::update() {
   checksum ^= 0xA0;
   packet_[42] = checksum;
 
-  // Отправляем через шину UART ESPHome
   this->write_array(packet_, 43);
-  
   this->publish_state(reading_raw);
 }
 
