@@ -144,10 +144,14 @@ void CapacitiveWaterSensor::update() {
     unsigned long start_time = millis();
     
     long reading_raw = readCapacitiveSensor();
+    
+    // Сохраняем сырое значение для отладки
+    ESP_LOGI(TAG, "RAW reading: %ld (samples: %u, timeout: %ums)", 
+             reading_raw, samples_, timeout_ms_);
+    
     float mapped_value = mapWithThreshold(reading_raw);
 
-    ESP_LOGI(TAG, "RAW: %ld → Value: %.1f (samples: %u, timeout: %ums)", 
-             reading_raw, mapped_value, samples_, timeout_ms_);
+    ESP_LOGI(TAG, "→ Water Level: %.1f", mapped_value);
 
     publish_state(mapped_value);
     
