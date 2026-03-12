@@ -15,7 +15,7 @@ CapacitiveSensor::CapacitiveSensor(uint8_t sendPin, uint8_t receivePin) {
 }
 
 long CapacitiveSensor::capacitiveSensorRaw(uint8_t samples) {
-    total = 0;
+    long total = 0; // Перенесли внутрь
     if (error < 0) return -1;
     for (uint8_t i = 0; i < samples; i++) {
         *sOut &= ~sBit; *rReg |= rBit; *rOut &= ~rBit; *rReg &= ~rBit;
