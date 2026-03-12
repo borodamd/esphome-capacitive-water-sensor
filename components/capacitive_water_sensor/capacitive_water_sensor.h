@@ -4,10 +4,9 @@
 #include "esphome/components/sensor/sensor.h"
 #include <CapacitiveSensor.h>
 
-// Важно для внешних компонентов в ESPHome
-#ifdef USE_ARDUINO
+// Пробуем включить HardwareSerial напрямую
 #include <Arduino.h>
-#endif
+#include <HardwareSerial.h> 
 
 #include <memory>
 
