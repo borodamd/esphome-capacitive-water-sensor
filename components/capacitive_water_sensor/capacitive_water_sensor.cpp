@@ -1,7 +1,10 @@
 #include "capacitive_water_sensor.h"
 #include "esphome/core/log.h"
 
-// Подключаем библиотеку ТОЛЬКО здесь
+// Отключаем авто-калибровку на уровне препроцессора
+#define CS_AutocaL_Millis 0xFFFFFFFF
+
+// Теперь подключаем библиотеку
 #include <CapacitiveSensor.h>
 
 namespace esphome {
