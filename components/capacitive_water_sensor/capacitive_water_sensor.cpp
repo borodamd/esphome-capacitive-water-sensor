@@ -10,14 +10,10 @@ void CapacitiveWaterSensor::setup() {
   sensor_impl_ = std::make_unique<CapacitiveSensor>(sender_pin_, sensor_pin_);
   sensor_impl_->set_CS_AutocaL_Millis(0xFFFFFFFF);
   sensor_impl_->set_CS_Timeout_Millis(500);
-  
-  // Просто Serial без двоеточий
-  Serial.begin(9600);
+  // Serial.begin больше не нужен, ESPHome настроит UART сам
 }
 
 void CapacitiveWaterSensor::update() {
-  // Используем uint8_t(100) или просто 100, если warning раздражает.
-  // Но библиотека обычно ждет unsigned int. Попробуем так:
   long reading_raw = sensor_impl_->capacitiveSensorRaw(100); 
   
   uint8_t mapped_value;
@@ -36,8 +32,8 @@ void CapacitiveWaterSensor::update() {
   checksum ^= 0xA0;
   packet_[42] = checksum;
 
-  Serial.write(packet_, 43);
-  Serial.flush();
+  // Отправляем через шину UART ESPHome
+  this->write_array(packet_, 43);
   
   this->publish_state(reading_raw);
 }
