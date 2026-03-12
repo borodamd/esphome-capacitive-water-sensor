@@ -1,94 +1,115 @@
-#include "capacitive_water_sensor.h"
-#include "esphome/core/log.h"
+/*
+  CapacitiveSensor.cpp v.04 - Capacitive Sensing Library
+  https://github.com/PaulStoffregen/CapacitiveSensor
+  Copyright (c) 2009 Paul Bagder  All right reserved.
+*/
 
-// Отключаем авто-калибровку на уровне препроцессора
-#define CS_AutocaL_Millis 0xFFFFFFFF
+#include "CapacitiveSensor.h"
 
-// Теперь подключаем библиотеку
-#include <CapacitiveSensor.h>
-
-namespace esphome {
-namespace capacitive_water_sensor {
-
-static const char *TAG = "capacitive_water_sensor.sensor";
-
-CapacitiveWaterSensor::CapacitiveWaterSensor(uint8_t send_pin, uint8_t receive_pin, uint32_t update_interval_ms)
-    : PollingComponent(update_interval_ms), send_pin_(send_pin), receive_pin_(receive_pin) {
-    sensor_ = nullptr;
+// Constructor
+CapacitiveSensor::CapacitiveSensor(uint8_t sendPin, uint8_t receivePin)
+{
+    error = 1;
+    loopTimingFactor = 310;
+    CS_Timeout_Millis = (2000);
+    CS_AutocaL_Millis = (20000);
+    leastTotal = 0;
+    lastCal = millis();
+    
+    // get pin mapping and port for send pin
+    sBit = digitalPinToBitMask(sendPin);
+    sReg = portOutputRegister(digitalPinToPort(sendPin));
+    sOut = sReg;
+    
+    // get pin mapping and port for receive pin
+    rBit = digitalPinToBitMask(receivePin);
+    rReg = portOutputRegister(digitalPinToPort(receivePin));
+    rIn = portInputRegister(digitalPinToPort(receivePin));
+    rOut = rReg;
+    rReg = portModeRegister(digitalPinToPort(receivePin));
+    
+    // reset pin modes
+    *rReg &= ~rBit;  // Set receive pin to INPUT
+    *sOut &= ~sBit;  // Set send pin LOW
+    pinMode(sendPin, OUTPUT);  // Make send pin an output
+    pinMode(receivePin, INPUT); // Make receive pin an input
 }
 
-void CapacitiveWaterSensor::setup() {
-    ESP_LOGCONFIG(TAG, "Setting up Capacitive Water Sensor...");
-    
-    // Создаем CapacitiveSensor
-    sensor_ = new CapacitiveSensor(send_pin_, receive_pin_);
-    
-    if (sensor_ == nullptr) {
-        ESP_LOGE(TAG, "Failed to create CapacitiveSensor!");
-        return;
+long CapacitiveSensor::capacitiveSensor(uint8_t samples)
+{
+    total = 0;
+    if (samples == 0) return 0;
+    for (uint8_t i = 0; i < samples; i++) {
+        total += capacitiveSensorRaw(1);
     }
     
-    // Настраиваем параметры
-    CapacitiveSensor* cap = static_cast<CapacitiveSensor*>(sensor_);
-    cap->set_CS_Timeout_Millis(timeout_ms_);
-    cap->set_CS_AutocaL_Millis(0xFFFFFFFF); // Отключаем автокалибровку
-    
-    ESP_LOGCONFIG(TAG, "  Send Pin: GPIO%u", send_pin_);
-    ESP_LOGCONFIG(TAG, "  Receive Pin: GPIO%u", receive_pin_);
-    ESP_LOGCONFIG(TAG, "  Samples: %u", samples_);
-    ESP_LOGCONFIG(TAG, "  Timeout: %u ms", timeout_ms_);
-}
-
-long CapacitiveWaterSensor::readCapacitiveSensor() {
-    if (sensor_ == nullptr) return -2;
-    CapacitiveSensor* cap = static_cast<CapacitiveSensor*>(sensor_);
-    return cap->capacitiveSensorRaw(samples_);
-}
-
-void CapacitiveWaterSensor::update() {
-    unsigned long start_time = millis();
-    
-    long reading_raw = readCapacitiveSensor();
-    float mapped_value;
-
-    if (reading_raw == -2) {
-        // Короткое замыкание - полный бак
-        mapped_value = static_cast<float>(shorted_value_);
-        ESP_LOGI(TAG, "RAW: -2 → SHORTED (full tank): %.1f", mapped_value);
-    } 
-    else if (reading_raw <= 0) {
-        // Ошибка измерения - считаем сухим
-        mapped_value = 0.0f;
-        ESP_LOGI(TAG, "RAW: %ld → ERROR/DRY: 0", reading_raw);
+    // Only calibrate if the calibration interval has passed
+    // ИСПРАВЛЕНО: явное приведение типов для abs()
+    if ( (millis() - lastCal > CS_AutocaL_Millis) && labs((long)(total - leastTotal)) < (long)(0.10f * (float)leastTotal) ) {
+        leastTotal = total;
+        lastCal = millis();
     }
-    else {
-        // Нормальное измерение - маппинг пропорционально samples
-        float min_val = 4200.0f * (samples_ / 1000.0f);
-        float max_val = 11000.0f * (samples_ / 1000.0f);
-        
-        float mapped = (reading_raw - min_val) / (max_val - min_val) * 120.0f;
-        mapped_value = std::max(0.0f, std::min(120.0f, mapped));
-        
-        ESP_LOGI(TAG, "RAW: %ld → NORMAL: %.1f (min=%.0f, max=%.0f)", 
-                 reading_raw, mapped_value, min_val, max_val);
-    }
-
-    publish_state(mapped_value);
     
-    unsigned long elapsed = millis() - start_time;
-    if (elapsed > 200) {
-        ESP_LOGW(TAG, "Update took %lu ms", elapsed);
+    total -= leastTotal;
+    return total;
+}
+
+long CapacitiveSensor::capacitiveSensorRaw(uint8_t samples)
+{
+    total1 = 0;
+    if (samples == 0) return 0;
+    for (uint8_t i = 0; i < samples; i++) {
+        if (CycleThis() < 1) {
+            total1 += 0;
+            timeoutOccurred = true;
+        } else {
+            total1 += reg;
+        }
     }
+    
+    if (timeoutOccurred) {
+        if (total1 == 0) return -2;
+        timeoutOccurred = false;
+    }
+    
+    return total1;
 }
 
-void CapacitiveWaterSensor::dump_config() {
-    ESP_LOGCONFIG(TAG, "Capacitive Water Sensor:");
-    ESP_LOGCONFIG(TAG, "  Send Pin: GPIO%u", send_pin_);
-    ESP_LOGCONFIG(TAG, "  Receive Pin: GPIO%u", receive_pin_);
-    ESP_LOGCONFIG(TAG, "  Samples: %u", samples_);
-    ESP_LOGCONFIG(TAG, "  Timeout: %u ms", timeout_ms_);
-    LOG_UPDATE_INTERVAL(this);
+void CapacitiveSensor::reset_CS_AutoCal()
+{
+    leastTotal = 9999999;
 }
 
-}  // namespace capacitive_water_sensor
-}  // namespace esphome
+void CapacitiveSensor::set_CS_AutocaL_Millis(unsigned long time)
+{
+    CS_AutocaL_Millis = time;
+}
+
+void CapacitiveSensor::set_CS_Timeout_Millis(unsigned long time)
+{
+    CS_Timeout_Millis = time;
+}
+
+int CapacitiveSensor::CycleThis()
+{
+    noInterrupts();
+    *rOut &= ~rBit;
+    *rReg |= rBit;
+    delayMicroseconds(10);
+    *rReg &= ~rBit;
+    *sOut |= sBit;
+    
+    timeout = 0;
+    while (!(*rIn & rBit)) {
+        if (timeout++ > CS_Timeout_Millis * (loopTimingFactor / 100)) {
+            *sOut &= ~sBit;
+            interrupts();
+            return 0;
+        }
+    }
+    
+    *sOut &= ~sBit;
+    reg = timeout;
+    interrupts();
+    return 1;
+}
